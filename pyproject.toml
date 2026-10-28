@@ -34,6 +34,7 @@ dev = [
     "mypy>=1.13,<3",
     "types-PyYAML>=6.0,<7",
     "textual>=8.2,<9",
+    "coverage>=7.6,<8",
 ]
 
 [tool.uv]
@@ -51,6 +52,14 @@ testpaths = ["tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
 filterwarnings = ["error"]
 xfail_strict = true
+
+[tool.coverage.run]
+branch = true
+source_pkgs = ["soerm"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
 
 [tool.ruff]
 line-length = 100

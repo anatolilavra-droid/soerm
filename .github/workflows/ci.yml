@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned tool version, the same one used to create uv.lock.
+  UV_VERSION: "0.11.32"
+  # Measured branch coverage at the time the gate was added: 94.90 % (Python 3.12).
+  COVERAGE_FAIL_UNDER: "94"
+
+jobs:
+  checks:
+    name: checks (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python }}
+          enable-cache: false
+      - name: Lock file matches pyproject.toml
+        run: uv lock --check
+      - name: Install from the lock file
+        run: uv sync --frozen
+      - name: Ruff
+        run: uv run --frozen ruff check .
+      - name: Ruff format
+        run: uv run --frozen ruff format --check .
+      - name: Mypy
+        run: uv run --frozen mypy --python-version ${{ matrix.python }}
+      - name: Tests with branch coverage
+        run: uv run --frozen coverage run -m pytest
+      - name: Coverage gate
+        run: uv run --frozen coverage report --fail-under="$COVERAGE_FAIL_UNDER"
+
+  hygiene:
+    name: forbidden files and secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: No databases, locks, keys or env files are tracked
+        run: |
+          set -euo pipefail
+          forbidden='\.(db|db-wal|db-shm|db-journal|sqlite|sqlite3|pem|key|p12|pfx)$|(^|/)\.env(\..*)?$|(^|/)\.soerm\.lock$'
+          if git ls-files | grep -E "$forbidden"; then
+            echo "::error::forbidden files are tracked (see above)"
+            exit 1
+          fi
+      - name: No secret-like content outside the documented fixtures
+        run: |
+          set -euo pipefail
+          # Intentional, fake secrets used to test redaction and the wheel audit. Real secrets
+          # are never added here: they are revoked and removed from history (SECURITY.md).
+          allowlist=(
+            examples/sample_workspace/findings.csv
+            examples/sample_workspace/findings.json
+            examples/sample_workspace/scan.sarif
+            scripts/release_tools.py
+            tests/unit/cli/test_cli_m8.py
+            tests/unit/cli/test_cli_playbook.py
+            tests/unit/cli/test_cli_report.py
+            tests/unit/cli/test_e2e_lifecycle.py
+            tests/unit/cli/test_m12_hardening.py
+            tests/unit/domain/factories.py
+            tests/unit/importers/test_import_security.py
+            tests/unit/importers/test_sarif_import.py
+            tests/unit/services/helpers.py
+            tests/unit/test_release_tools.py
+            tests/unit/tui/conftest.py
+          )
+          demo='hunter2-TOP-'
+          demo+='SECRET-token'
+          patterns=(
+            -e '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+            -e 'AKIA[0-9A-Z]{16}'
+            -e 'gh[pousr]_[A-Za-z0-9]{30,}'
+            -e 'xox[baprs]-[A-Za-z0-9-]{10,}'
+            -e '://[^/[:space:]:@"]+:[^/[:space:]@"]+@'
+            -e "$demo"
+          )
+          found=$(git ls-files -z | xargs -0 grep -lE "${patterns[@]}" || true)
+          unexpected=$(comm -23 <(printf '%s\n' "$found" | sed '/^$/d' | sort -u) \
+                                <(printf '%s\n' "${allowlist[@]}" | sort -u))
+          if [ -n "$unexpected" ]; then
+            printf '::error::secret-like content in: %s\n' $unexpected
+            exit 1
+          fi
+          echo "only documented fixtures contain secret-like content"
+
+  package:
+    name: wheel (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python }}
+          enable-cache: false
+      - name: Build sdist and wheel
+        run: uv build --out-dir dist
+      - name: Audit the wheel and write the SBOM
+        run: |
+          set -euo pipefail
+          wheel=$(ls dist/*.whl)
+          uv run --no-project python scripts/release_tools.py check-wheel "$wheel"
+          uv run --no-project python scripts/release_tools.py sbom --lock uv.lock \
+            --wheel "$wheel" --output "$RUNNER_TEMP/soerm.cdx.json"
+      - name: Install the wheel into a clean environment
+        run: |
+          set -euo pipefail
+          smoke="$RUNNER_TEMP/smoke"
+          uv venv "$smoke/venv" --python ${{ matrix.python }}
+          uv export --frozen --no-dev --no-emit-project --format requirements.txt \
+            --output-file "$smoke/requirements.txt"
+          uv pip install --python "$smoke/venv/bin/python" --require-hashes \
+            -r "$smoke/requirements.txt"
+          uv pip install --python "$smoke/venv/bin/python" --no-deps dist/*.whl
+          uv pip check --python "$smoke/venv/bin/python"
+      - name: Smoke test of the installed package
+        run: |
+          set -euo pipefail
+          smoke="$RUNNER_TEMP/smoke"
+          bin="$smoke/venv/bin"
+          ws="$smoke/workspace"
+          cp -r examples/sample_workspace "$ws"
+          cd "$smoke"
+          location=$("$bin/python" -I -c 'import soerm; print(soerm.__file__)')
+          case "$location" in "$smoke/venv/"*) ;; *) echo "::error::not the installed wheel"; exit 1;; esac
+          "$bin/soerm" --version
+          "$bin/soerm" config validate --workspace "$ws"
+          "$bin/soerm" asset add --workspace "$ws" --actor alice --name "Billing API" \
+            --owner platform --environment production --criticality high \
+            --classification confidential --exposure internet
+          "$bin/soerm" import run --workspace "$ws" --actor alice --format sarif \
+            --asset-id AST-000001 scan.sarif
+          "$bin/soerm" report generate --workspace "$ws" --output report.md
+          "$bin/soerm" audit verify --workspace "$ws"
+          "$bin/soerm" tui --workspace "$ws" --plain
+          if grep -rl hunter2 "$ws"/soerm.db* "$ws"/report.md; then
+            echo "::error::a demo secret reached the database or the report"
+            exit 1
+          fi
