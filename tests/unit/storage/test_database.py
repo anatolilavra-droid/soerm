@@ -25,6 +25,12 @@ from soerm.storage.transactions import transaction
 from .conftest import NOW
 
 V1_CHECKSUM = "d7c8ce7fa4af8f2b27925f95c0f10e5f87b6257d59c063096d48ec67346bea61"
+V2_CHECKSUM = "76b5ee60b77c7dee73bc4105eb3f0a15917fce46510eebe1752d73860878ce62"
+# Every released migration, pinned. A new migration is added here when it is released.
+RELEASED_CHECKSUMS = {
+    (1, "initial_schema"): V1_CHECKSUM,
+    (2, "playbook_runs"): V2_CHECKSUM,
+}
 SHA = "a" * 64
 TS = "2026-03-01T12:00:00.000000Z"
 TS2 = "2026-03-01T13:00:00.000000Z"
@@ -194,13 +200,26 @@ def test_migrations_apply_exactly_once(db_path: Path) -> None:
 
 
 def test_migration_two_is_pinned_and_v1_is_untouched() -> None:
-    assert [m.version for m in MIGRATIONS] == [1, 2]
+    """Order, names and checksums of the released migrations. Editing an applied migration
+    is refused at startup: see test_checksum_mismatch_stops_startup and
+    test_edited_migration_is_detected (and test_m13_fixture for a real M13 database)."""
+    assert [(m.version, m.name) for m in MIGRATIONS] == [
+        (1, "initial_schema"),
+        (2, "playbook_runs"),
+    ]
     assert MIGRATIONS[0].checksum == V1_CHECKSUM
+    assert MIGRATIONS[1].checksum == V2_CHECKSUM
 
 
 def test_released_migration_is_pinned() -> None:
     """Editing migration 1 changes this checksum: add a new migration instead."""
     assert MIGRATIONS[0].checksum == V1_CHECKSUM
+
+
+def test_every_released_migration_is_pinned() -> None:
+    """Editing any released migration changes its checksum: add a new migration instead."""
+    current = {(m.version, m.name): m.checksum for m in MIGRATIONS}
+    assert {key: current.get(key) for key in RELEASED_CHECKSUMS} == RELEASED_CHECKSUMS
 
 
 def test_first_migration_creates_the_required_tables(conn: SoermConnection) -> None:
