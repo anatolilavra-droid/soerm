@@ -1,0 +1,9 @@
+format: generic_json
+records_path: items[]
+fields:
+  title: name
+  description: detail.text
+  evidence: detail.evidence
+  owner: owner
+  severity: sev
+  location: where

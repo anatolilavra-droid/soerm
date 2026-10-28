@@ -1,0 +1,27 @@
+version: 1
+playbook_id: phishing-triage
+name: Phishing triage
+playbook_version: "1.0"
+incident_types: [phishing]
+roles: [analyst, lead]
+steps:
+  - id: step-001
+    type: manual
+    title: Confirm the report
+    text: Read the reported message headers and confirm it is phishing.
+    owner_role: analyst
+  - id: step-002
+    type: checklist
+    title: Collect indicators
+    items: ["Sender address recorded", "Links recorded"]
+  - id: step-003
+    type: notify_text
+    title: Notify the team
+    text: "Team, a phishing campaign was confirmed. Do not open the message."
+  - id: step-004
+    type: manual
+    title: Block the sender domain
+    text: Ask the mail admin to block the sender domain.
+    requires_manual_approval: true
+escalation_criteria: ["Credentials were entered"]
+closure_criteria: ["Mailbox cleaned"]

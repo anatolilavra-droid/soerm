@@ -1,0 +1,119 @@
+[build-system]
+requires = ["hatchling>=1.25,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "soerm"
+version = "0.1.0"
+description = "Security Operations Evidence & Response Manager: local CLI for assets, findings, incidents, playbooks and reports"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.6,<3",
+    "PyYAML>=6.0,<7",
+]
+classifiers = [
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+
+[project.scripts]
+soerm = "soerm.cli.main:main"
+
+[project.optional-dependencies]
+tui = [
+    "textual>=8.2,<9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+    "ruff>=0.8,<1",
+    "mypy>=1.13,<3",
+    "types-PyYAML>=6.0,<7",
+    "textual>=8.2,<9",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/soerm"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src/soerm", "/tests", "/README.md", "/pyproject.toml"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+filterwarnings = ["error"]
+xfail_strict = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "A", "C4", "DTZ", "SIM", "PT", "PTH",
+    "PERF", "RUF", "S", "T20", "TID", "LOG", "G",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S108", "TID251"]
+"src/soerm/cli/**" = ["T201"]
+# Migrations are literal, immutable SQL; long CHECK expressions stay on one line.
+"src/soerm/storage/migrations.py" = ["E501"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"socket".msg = "Network access is forbidden."
+"ssl".msg = "Network access is forbidden."
+"selectors".msg = "Network access is forbidden."
+"asyncio".msg = "Network access is forbidden."
+"urllib".msg = "Network access is forbidden."
+"http".msg = "Network access is forbidden."
+"ftplib".msg = "Network access is forbidden."
+"smtplib".msg = "Network access is forbidden."
+"poplib".msg = "Network access is forbidden."
+"imaplib".msg = "Network access is forbidden."
+"telnetlib".msg = "Network access is forbidden."
+"nntplib".msg = "Network access is forbidden."
+"xmlrpc".msg = "Network access is forbidden."
+"socketserver".msg = "Network access is forbidden."
+"wsgiref".msg = "Network access is forbidden."
+"requests".msg = "Network access is forbidden."
+"httpx".msg = "Network access is forbidden."
+"aiohttp".msg = "Network access is forbidden."
+"urllib3".msg = "Network access is forbidden."
+"websockets".msg = "Network access is forbidden."
+"subprocess".msg = "No process execution."
+"os.system".msg = "No process execution."
+"os.popen".msg = "No process execution."
+"importlib".msg = "No dynamic imports."
+"runpy".msg = "No dynamic code loading."
+"ctypes".msg = "No native code loading."
+"pickle".msg = "No unsafe deserialization."
+"marshal".msg = "No unsafe deserialization."
+"shelve".msg = "No unsafe deserialization."
+"yaml.load".msg = "Use the project's safe YAML loader."
+"yaml.unsafe_load".msg = "Use the project's safe YAML loader."
+"yaml.full_load".msg = "Use the project's safe YAML loader."
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "tests"]
+mypy_path = "$MYPY_CONFIG_FILE_DIR/src"
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true

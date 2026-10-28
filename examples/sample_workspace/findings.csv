@@ -1,0 +1,3 @@
+title,description,asset,evidence,severity
+Weak password policy,Minimum length is 6,web-01,policy export,Low
+Open admin share,Share is readable by all staff,web-01,api_key=hunter2-TOP-SECRET-token,High

@@ -1,0 +1,9 @@
+format: csv
+delimiter: ","
+has_header: true
+columns:
+  title: title
+  description: description
+  asset_reference: asset
+  evidence: evidence
+  severity: severity

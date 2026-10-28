@@ -1,0 +1,18 @@
+{
+  "items": [
+    {
+      "name": "Outdated TLS configuration",
+      "detail": {"text": "TLS 1.0 is still enabled", "evidence": "cipher list: TLS_RSA_WITH_3DES"},
+      "owner": "platform",
+      "sev": "medium",
+      "where": "nginx.conf:41"
+    },
+    {
+      "name": "Admin panel without MFA",
+      "detail": {"text": "No second factor on /admin", "evidence": "token=hunter2-TOP-SECRET-token"},
+      "owner": "platform",
+      "sev": "high",
+      "where": "/admin"
+    }
+  ]
+}

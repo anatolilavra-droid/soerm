@@ -1,0 +1,12 @@
+version: 1
+redaction:
+  rules:
+    - name: employee_id
+      pattern: '\bEMP-\d{6}\b'
+      replacement: '[EMPLOYEE]'
+approvals:
+  ttl_hours: 168
+  require_distinct_approver: true
+reports:
+  top_findings: 10
+  max_listed: 50
